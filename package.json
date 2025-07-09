@@ -1,14 +1,17 @@
 {
+  "name": "black-komputer-api",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
   "dependencies": {
     "body-parser": "^2.2.0",
     "cors": "^2.8.5",
     "express": "^5.1.0"
   },
-
-  "scripts": {
-  "start": "node index.js"
-},
-
   "devDependencies": {
     "nodemon": "^3.1.10"
   }
