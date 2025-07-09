@@ -187,6 +187,16 @@ app.put("/api/update-user/:email", (req, res) => {
   res.json({ message: "User berhasil diupdate", user });
 });
 
+app.delete("/api/delete-user/:email", (req, res) => {
+  const { email } = req.params;
+  const index = users.findIndex((u) => u.email === email);
+  if (index === -1) return res.status(404).json({ message: "User tidak ditemukan" });
+
+  const deletedUser = users.splice(index, 1);
+  res.json({ message: "User berhasil dihapus", deletedUser });
+});
+
+
 // ======== Jalankan Server =========
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
