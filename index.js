@@ -196,39 +196,20 @@ app.delete("/api/delete-user/:email", (req, res) => {
   res.json({ message: "User berhasil dihapus", deletedUser });
 });
 
-let adminUsers = [
-];
-
-// ADMIN SIGNUP
-app.post("/api/admin/signup", (req, res) => {
-  const { name, email, password } = req.body;
-  if (!name || !email || !password)
-    return res.status(400).json({ message: "Lengkapi semua field!" });
-
-  if (adminUsers.some((admin) => admin.email === email))
-    return res.status(409).json({ message: "Email admin sudah digunakan" });
-
-  const newAdmin = { id: Date.now(), name, email, password };
-  adminUsers.push(newAdmin);
-  res.status(201).json({ message: "Admin terdaftar", admin: newAdmin });
-});
 
 // ADMIN LOGIN
-app.post("/api/admin/login", (req, res) => {
+// Contoh route backend
+app.post("/api/admin/login", async (req, res) => {
   const { email, password } = req.body;
-  const admin = adminUsers.find((a) => a.email === email && a.password === password);
-  if (!admin)
-    return res.status(401).json({ message: "Email atau password admin salah" });
 
-  res.json({
-    message: "Login admin berhasil",
-    admin: {
-      id: admin.id,
-      name: admin.name,
-      email: admin.email,
-    },
-  });
+  // Ganti ini dengan validasi real ke database
+  if (email === "dani@gmail.com" && password === "admin123") {
+    res.json({ admin: { email, role: "admin" } });
+  } else {
+    res.status(401).json({ message: "Email atau password salah" });
+  }
 });
+
 
 
 
