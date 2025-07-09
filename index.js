@@ -3,7 +3,7 @@ const cors = require("cors");
 const bodyParser = require("body-parser");
 
 const app = express();
-const PORT = process.env.PORT || 3001; // ✅ FIX untuk Railway
+const PORT = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(bodyParser.json({ limit: "10mb" }));
@@ -114,7 +114,7 @@ app.delete("/api/addresses/:id", (req, res) => {
   res.json({ message: "Alamat dihapus", deleted });
 });
 
-// ======== Order =========
+// ======== Orders =========
 let orders = [];
 
 app.get("/api/orders", (req, res) => {
@@ -196,13 +196,9 @@ app.delete("/api/delete-user/:email", (req, res) => {
   res.json({ message: "User berhasil dihapus", deletedUser });
 });
 
-
-// ADMIN LOGIN
-// Contoh route backend
+// ======== Admin Login =========
 app.post("/api/admin/login", async (req, res) => {
   const { email, password } = req.body;
-
-  // Ganti ini dengan validasi real ke database
   if (email === "dani@gmail.com" && password === "admin123") {
     res.json({ admin: { email, role: "admin" } });
   } else {
@@ -210,8 +206,10 @@ app.post("/api/admin/login", async (req, res) => {
   }
 });
 
-
-
+// ======== Tambahan: Get All Users untuk Dashboard Admin =========
+app.get("/api/users", (req, res) => {
+  res.json(users);
+});
 
 // ======== Jalankan Server =========
 app.listen(PORT, () => {
