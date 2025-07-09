@@ -70,6 +70,16 @@ app.put("/api/products/:id", (req, res) => {
   res.json({ message: "Produk diperbarui", product });
 });
 
+app.put("/api/orders/:id", (req, res) => {
+  const order = orders.find((o) => o.id == req.params.id);
+  if (!order) {
+    return res.status(404).json({ message: "Pesanan tidak ditemukan" });
+  }
+
+  Object.assign(order, req.body);
+  res.json({ message: "Pesanan diperbarui", order });
+});
+
 app.delete("/api/products/:id", (req, res) => {
   const index = products.findIndex(p => p.id == req.params.id);
   if (index === -1) return res.status(404).json({ message: "Produk tidak ditemukan" });
