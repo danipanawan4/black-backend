@@ -215,6 +215,29 @@ app.post("/api/admin/login", (req, res) => {
 // ======== Tambahan: Get All Users =========
 app.get("/api/users", (req, res) => res.json(users));
 
+
+
+
+const multer = require("multer");
+const path = require("path");
+
+// Konfigurasi multer
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, "public/images"),
+  filename: (req, file, cb) => {
+    const filename = Date.now() + path.extname(file.originalname);
+    cb(null, filename);
+  },
+});
+
+const upload = multer({ storage });
+
+app.post("/api/upload", upload.single("image"), (req, res) => {
+  if (!req.file) return res.status(400).json({ message: "Tidak ada file diunggah" });
+  res.status(200).json({ imagePath: "/images/" + req.file.filename });
+});
+
+
 // ======== Start Server =========
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
