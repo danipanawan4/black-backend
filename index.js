@@ -139,10 +139,19 @@ app.post("/api/orders", (req, res) => {
   if (!name || !items?.length || !total || !address || !payment) {
     return res.status(400).json({ message: "Data pesanan tidak lengkap" });
   }
-  const newOrder = {
-    id: Date.now(), name, items, total, address, payment,
-    date: date || new Date().toISOString()
-  };
+ const newOrder = {
+  id: Date.now(),
+  name,
+  items,
+  total,
+  address,
+  payment,
+  date: date || new Date().toISOString(),
+  status: "Belum Dibayar",          // Default status
+  courier: "",                      // Default kurir kosong
+  trackingNumber: ""               // Default no resi kosong
+};
+
   orders.push(newOrder);
   res.status(201).json({ message: "Pesanan berhasil dibuat", order: newOrder });
 });
@@ -153,6 +162,15 @@ app.delete("/api/orders/:id", (req, res) => {
   const deleted = orders.splice(index, 1);
   res.json({ message: "Pesanan dihapus", deleted });
 });
+
+// Update status atau info pengiriman
+app.put("/api/orders/:id", (req, res) => {
+  const order = orders.find(o => o.id == req.params.id);
+  if (!order) return res.status(404).json({ message: "Pesanan tidak ditemukan" });
+  Object.assign(order, req.body);
+  res.json({ message: "Pesanan diupdate", order });
+});
+
 
 // ======== Users =========
 let users = [];
