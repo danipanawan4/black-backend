@@ -97,10 +97,12 @@ app.get("/api/users", async (req, res) => {
 
 // ======== Cart =========
 app.get("/api/cart", async (req, res) => {
-  const { rows } = await db.query("SELECT * FROM cart");
+  const userId = req.query.user_id;
+  if (!userId) return res.status(400).json({ message: "User ID dibutuhkan" });
+
+  const { rows } = await db.query("SELECT * FROM cart WHERE user_id = $1", [userId]);
   res.json(rows);
 });
-
 app.post("/api/cart", async (req, res) => {
   const { product_id, user_id, qty } = req.body;
 
