@@ -271,10 +271,18 @@ app.post("/api/checkout/confirm/:id", async (req, res) => {
   };
 
   await db.query(
-    `INSERT INTO orders (name, items, total, address, payment, date, status, courier, trackingNumber)
-     VALUES ($1,$2,$3,$4,$5,$6,'Sudah Dibayar','','')`,
-    [confirmed.name, confirmed.items, confirmed.total, confirmed.address, confirmed.payment, confirmed.createdat]
-  );
+  `INSERT INTO orders (name, items, total, address, payment, date, status, courier, trackingNumber)
+   VALUES ($1,$2,$3,$4,$5,$6,'Sudah Dibayar','','')`,
+  [
+    confirmed.name,
+    confirmed.items,
+    confirmed.total,
+    confirmed.address,
+    confirmed.payment,
+    confirmed.createdat || confirmed.createdAt  // ✅ FIXED LINE
+  ]
+);
+
   await db.query("DELETE FROM draft_orders WHERE id=$1", [req.params.id]);
   res.status(201).json({ message: "Order berhasil dikonfirmasi", order: confirmed });
 });
