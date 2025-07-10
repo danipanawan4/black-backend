@@ -261,30 +261,42 @@ app.get("/api/checkout/drafts", async (req, res) => {
 });
 
 app.post("/api/checkout/confirm/:id", async (req, res) => {
-  const draft = await db.query("SELECT * FROM draft_orders WHERE id=$1", [req.params.id]);
-  if (draft.rows.length === 0) return res.status(404).json({ message: "Draft tidak ditemukan" });
+  try {
+    const { id } = req.params;
+    const draft = await db.query("SELECT * FROM draft_orders WHERE id = $1", [id]);
 
-  const confirmed = {
-    ...draft.rows[0],
-    paymentStatus: "Sudah Dibayar",
-    paymentProof: req.body.paymentProof || "",
-  };
+    if (draft.rows.length === 0) {
+      return res.status(404).json({ message: "Draft tidak ditemukan" });
+    }
 
-  await db.query(
-  `INSERT INTO orders (name, items, total, address, payment, date, status, courier, trackingNumber)
-   VALUES ($1,$2,$3,$4,$5,$6,'Sudah Dibayar','','')`,
-  [
-    confirmed.name,
-    confirmed.items,
-    confirmed.total,
-    confirmed.address,
-    confirmed.payment,
-    confirmed.createdat || confirmed.createdAt  // ✅ FIXED LINE
-  ]
-);
+    const data = draft.rows[0];
+    const createdAt = data.createdat || data.createdAt || new Date().toISOString();
 
-  await db.query("DELETE FROM draft_orders WHERE id=$1", [req.params.id]);
-  res.status(201).json({ message: "Order berhasil dikonfirmasi", order: confirmed });
+    const confirmed = {
+      ...data,
+      paymentStatus: "Sudah Dibayar",
+      paymentProof: req.body.paymentProof || "",
+    };
+
+    // Validasi minimal: pastikan name, items, total, dll tidak null
+    if (!confirmed.name || !confirmed.items || !confirmed.total || !confirmed.address || !confirmed.payment) {
+      console.error("❌ Data tidak lengkap:", confirmed);
+      return res.status(400).json({ message: "Data tidak lengkap. Harap lengkapi draft pesanan." });
+    }
+
+    await db.query(
+      `INSERT INTO orders (name, items, total, address, payment, date, status, courier, trackingNumber)
+       VALUES ($1,$2,$3,$4,$5,$6,'Sudah Dibayar','','')`,
+      [confirmed.name, confirmed.items, confirmed.total, confirmed.address, confirmed.payment, createdAt]
+    );
+
+    await db.query("DELETE FROM draft_orders WHERE id = $1", [id]);
+
+    res.status(201).json({ message: "Order berhasil dikonfirmasi", order: confirmed });
+  } catch (err) {
+    console.error("❌ Gagal konfirmasi pembayaran:", err.message);
+    res.status(500).json({ message: "Terjadi kesalahan server saat konfirmasi pembayaran" });
+  }
 });
 
 // ======== Admin Login =========
