@@ -85,10 +85,31 @@ app.put("/api/update-user/:email", async (req, res) => {
 });
 
 app.delete("/api/delete-user/:email", async (req, res) => {
-  const result = await db.query("DELETE FROM users WHERE email=$1 RETURNING *", [req.params.email]);
-  if (!result.rows[0]) return res.status(404).json({ message: "User tidak ditemukan" });
-  res.json({ message: "User berhasil dihapus", deletedUser: result.rows[0] });
+  try {
+    const email = req.params.email;
+
+    // Cari user ID berdasarkan email
+    const userResult = await db.query("SELECT id FROM users WHERE email = $1", [email]);
+    if (userResult.rows.length === 0) return res.status(404).json({ message: "User tidak ditemukan" });
+
+    const userId = userResult.rows[0].id;
+
+    // Hapus cart user
+    await db.query("DELETE FROM cart WHERE user_id = $1", [userId]);
+
+    // Hapus user
+    const deleteUser = await db.query("DELETE FROM users WHERE id = $1 RETURNING *", [userId]);
+
+    res.json({
+      message: "User dan cart berhasil dihapus",
+      deletedUser: deleteUser.rows[0],
+    });
+  } catch (err) {
+    console.error("Gagal hapus user:", err);
+    res.status(500).json({ message: "Terjadi kesalahan server" });
+  }
 });
+
 
 app.get("/api/users", async (req, res) => {
   const { rows } = await db.query("SELECT * FROM users");
