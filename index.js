@@ -1,9 +1,11 @@
-// backend/index.js
+// ======== index.js FINAL PAKAI POSTGRESQL =========
 const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 const multer = require("multer");
 const path = require("path");
+require("dotenv").config();
+const db = require("./db");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -13,152 +15,226 @@ app.use(bodyParser.json({ limit: "10mb" }));
 app.use(bodyParser.urlencoded({ extended: true, limit: "10mb" }));
 app.use("/images", express.static("public/images"));
 
-// ======== Dummy Products =========
-let products = [
-  { id: 1, name: "Intel Core i5 12400F", category: "Processor", price: 2800000, image: "/images/processor.png", description: "Prosesor Intel generasi ke-12 dengan 6-core untuk performa gaming dan multitasking." },
-  { id: 2, name: "Corsair Vengeance 16GB", category: "RAM", price: 950000, image: "/images/ram.png", description: "RAM DDR4 Corsair 16GB 3200MHz cocok untuk gaming dan produktivitas." },
-  { id: 3, name: "MSI B660M Mortar", category: "Motherboard", price: 1850000, image: "/images/motherboard.png", description: "akakakaksjaskdakjakjgfakgfakgfakjsgkjjjjjjjjjjj" },
-  { id: 4, name: "SSD 256 GB", category: "Storage", price: 800000, image: "/images/ssd.png", description: "kajdddddddddddddddddddddddddddddddddddd" }
-];
-
-let cart = [];
-let addresses = [];
-let orders = [];
-let draftOrders = [];
-let users = [];
-
 // ======== Products =========
-app.get("/api/products", (req, res) => res.json(products));
-app.get("/api/products/:id", (req, res) => {
-  const product = products.find(p => p.id === parseInt(req.params.id));
-  product ? res.json(product) : res.status(404).json({ message: "Produk tidak ditemukan" });
+app.get("/api/products", async (req, res) => {
+  const { rows } = await db.query("SELECT * FROM products ORDER BY id ASC");
+  res.json(rows);
 });
-app.post("/api/products", (req, res) => {
+
+app.get("/api/products/:id", async (req, res) => {
+  const { rows } = await db.query("SELECT * FROM products WHERE id = $1", [req.params.id]);
+  if (!rows[0]) return res.status(404).json({ message: "Produk tidak ditemukan" });
+  res.json(rows[0]);
+});
+
+app.post("/api/products", async (req, res) => {
   const { name, category, price, image, description } = req.body;
-  const newProduct = { id: Date.now(), name, category, price, image, description: description || "" };
-  products.push(newProduct);
-  res.status(201).json({ message: "Produk ditambahkan", product: newProduct });
+  const result = await db.query(
+    "INSERT INTO products (name, category, price, image, description) VALUES ($1, $2, $3, $4, $5) RETURNING *",
+    [name, category, price, image, description || ""]
+  );
+  res.status(201).json({ message: "Produk ditambahkan", product: result.rows[0] });
 });
-app.put("/api/products/:id", (req, res) => {
-  const product = products.find(p => p.id == req.params.id);
-  if (!product) return res.status(404).json({ message: "Produk tidak ditemukan" });
-  Object.assign(product, req.body);
-  res.json({ message: "Produk diperbarui", product });
+
+app.put("/api/products/:id", async (req, res) => {
+  const { name, category, price, image, description } = req.body;
+  const result = await db.query(
+    "UPDATE products SET name=$1, category=$2, price=$3, image=$4, description=$5 WHERE id=$6 RETURNING *",
+    [name, category, price, image, description, req.params.id]
+  );
+  if (!result.rows[0]) return res.status(404).json({ message: "Produk tidak ditemukan" });
+  res.json({ message: "Produk diperbarui", product: result.rows[0] });
 });
-app.delete("/api/products/:id", (req, res) => {
-  const index = products.findIndex(p => p.id == req.params.id);
-  if (index === -1) return res.status(404).json({ message: "Produk tidak ditemukan" });
-  const deleted = products.splice(index, 1);
-  res.json({ message: "Produk dihapus", deleted });
+
+app.delete("/api/products/:id", async (req, res) => {
+  const result = await db.query("DELETE FROM products WHERE id=$1 RETURNING *", [req.params.id]);
+  if (!result.rows[0]) return res.status(404).json({ message: "Produk tidak ditemukan" });
+  res.json({ message: "Produk dihapus", deleted: result.rows[0] });
+});
+
+// ======== Users =========
+app.post("/api/signup", async (req, res) => {
+  const { name, email, password, image } = req.body;
+  if (!name || !email || !password) return res.status(400).json({ message: "Lengkapi semua field!" });
+  const check = await db.query("SELECT * FROM users WHERE email = $1", [email]);
+  if (check.rows.length > 0) return res.status(409).json({ message: "Email sudah digunakan" });
+  const result = await db.query(
+    "INSERT INTO users (name, email, password, image) VALUES ($1, $2, $3, $4) RETURNING *",
+    [name, email, password, image || null]
+  );
+  res.status(201).json({ message: "Pendaftaran berhasil", user: result.rows[0] });
+});
+
+app.post("/api/login", async (req, res) => {
+  const { email, password } = req.body;
+  const result = await db.query("SELECT * FROM users WHERE email = $1 AND password = $2", [email, password]);
+  if (result.rows.length === 0) return res.status(401).json({ message: "Email atau password salah" });
+  const user = result.rows[0];
+  res.json({ message: "Login berhasil", user: { id: user.id, name: user.name, email: user.email, image: user.image } });
+});
+
+app.put("/api/update-user/:email", async (req, res) => {
+  const { email } = req.params;
+  const { name, password, image } = req.body;
+  const result = await db.query(
+    "UPDATE users SET name=$1, password=$2, image=$3 WHERE email=$4 RETURNING *",
+    [name, password, image, email]
+  );
+  if (!result.rows[0]) return res.status(404).json({ message: "User tidak ditemukan" });
+  res.json({ message: "User berhasil diupdate", user: result.rows[0] });
+});
+
+app.delete("/api/delete-user/:email", async (req, res) => {
+  const result = await db.query("DELETE FROM users WHERE email=$1 RETURNING *", [req.params.email]);
+  if (!result.rows[0]) return res.status(404).json({ message: "User tidak ditemukan" });
+  res.json({ message: "User berhasil dihapus", deletedUser: result.rows[0] });
+});
+
+app.get("/api/users", async (req, res) => {
+  const { rows } = await db.query("SELECT * FROM users");
+  res.json(rows);
 });
 
 // ======== Cart =========
-app.get("/api/cart", (req, res) => res.json(cart));
-app.post("/api/cart", (req, res) => {
-  const { productId, qty } = req.body;
-  const id = Date.now();
-  const newItem = { id, productId, qty: qty || 1 };
-  cart.push(newItem);
-  res.status(201).json(newItem);
+app.get("/api/cart", async (req, res) => {
+  const { rows } = await db.query("SELECT * FROM cart");
+  res.json(rows);
 });
-app.patch("/api/cart/:id", (req, res) => {
-  const item = cart.find(i => i.id == req.params.id);
-  if (!item) return res.status(404).json({ message: "Item tidak ditemukan" });
-  item.qty = req.body.qty;
-  res.json(item);
+
+app.post("/api/cart", async (req, res) => {
+  const { product_id, user_id, qty } = req.body;
+  const result = await db.query(
+    "INSERT INTO cart (product_id, user_id, qty) VALUES ($1, $2, $3) RETURNING *",
+    [product_id, user_id, qty || 1]
+  );
+  res.status(201).json(result.rows[0]);
 });
-app.delete("/api/cart/:id", (req, res) => {
-  const index = cart.findIndex(i => i.id == req.params.id);
-  if (index === -1) return res.status(404).json({ message: "Item tidak ditemukan" });
-  const deleted = cart.splice(index, 1);
-  res.json({ message: "Item dihapus", deleted });
+
+app.patch("/api/cart/:id", async (req, res) => {
+  const { qty } = req.body;
+  const result = await db.query("UPDATE cart SET qty=$1 WHERE id=$2 RETURNING *", [qty, req.params.id]);
+  if (!result.rows[0]) return res.status(404).json({ message: "Item tidak ditemukan" });
+  res.json(result.rows[0]);
 });
-app.delete("/api/cart", (req, res) => {
-  cart = [];
+
+app.delete("/api/cart/:id", async (req, res) => {
+  const result = await db.query("DELETE FROM cart WHERE id=$1 RETURNING *", [req.params.id]);
+  if (!result.rows[0]) return res.status(404).json({ message: "Item tidak ditemukan" });
+  res.json({ message: "Item dihapus", deleted: result.rows[0] });
+});
+
+app.delete("/api/cart", async (req, res) => {
+  await db.query("DELETE FROM cart");
   res.json({ message: "Keranjang dikosongkan" });
 });
 
 // ======== Addresses =========
-app.get("/api/addresses", (req, res) => res.json(addresses));
-app.post("/api/addresses", (req, res) => {
+app.get("/api/addresses", async (req, res) => {
+  const { rows } = await db.query("SELECT * FROM addresses");
+  res.json(rows);
+});
+
+app.post("/api/addresses", async (req, res) => {
   const { name, address, phone } = req.body;
-  const newAddress = { id: Date.now(), name, address, phone };
-  addresses.push(newAddress);
-  res.status(201).json(newAddress);
+  const result = await db.query(
+    "INSERT INTO addresses (name, address, phone) VALUES ($1, $2, $3) RETURNING *",
+    [name, address, phone]
+  );
+  res.status(201).json(result.rows[0]);
 });
-app.put("/api/addresses/:id", (req, res) => {
-  const addr = addresses.find(a => a.id == req.params.id);
-  if (!addr) return res.status(404).json({ message: "Alamat tidak ditemukan" });
-  Object.assign(addr, req.body);
-  res.json(addr);
+
+app.put("/api/addresses/:id", async (req, res) => {
+  const { name, address, phone } = req.body;
+  const result = await db.query(
+    "UPDATE addresses SET name=$1, address=$2, phone=$3 WHERE id=$4 RETURNING *",
+    [name, address, phone, req.params.id]
+  );
+  if (!result.rows[0]) return res.status(404).json({ message: "Alamat tidak ditemukan" });
+  res.json(result.rows[0]);
 });
-app.delete("/api/addresses/:id", (req, res) => {
-  const index = addresses.findIndex(a => a.id == req.params.id);
-  if (index === -1) return res.status(404).json({ message: "Alamat tidak ditemukan" });
-  const deleted = addresses.splice(index, 1);
-  res.json({ message: "Alamat dihapus", deleted });
+
+app.delete("/api/addresses/:id", async (req, res) => {
+  const result = await db.query("DELETE FROM addresses WHERE id=$1 RETURNING *", [req.params.id]);
+  if (!result.rows[0]) return res.status(404).json({ message: "Alamat tidak ditemukan" });
+  res.json({ message: "Alamat dihapus", deleted: result.rows[0] });
 });
 
 // ======== Orders =========
-app.get("/api/orders", (req, res) => res.json(orders));
-app.post("/api/orders", (req, res) => {
-  const { name, items, total, address, payment, date } = req.body;
-  if (!name || !items?.length || !total || !address || !payment) {
-    return res.status(400).json({ message: "Data pesanan tidak lengkap" });
-  }
-  const newOrder = {
-    id: Date.now(), name, items, total, address, payment,
-    date: date || new Date().toISOString(),
-    status: "Belum Dibayar", courier: "", trackingNumber: ""
-  };
-  orders.push(newOrder);
-  res.status(201).json({ message: "Pesanan berhasil dibuat", order: newOrder });
-});
-app.put("/api/orders/:id", (req, res) => {
-  const order = orders.find(o => o.id == req.params.id);
-  if (!order) return res.status(404).json({ message: "Pesanan tidak ditemukan" });
-  Object.assign(order, req.body);
-  res.json({ message: "Pesanan diupdate", order });
-});
-app.delete("/api/orders/:id", (req, res) => {
-  const index = orders.findIndex(o => o.id === parseInt(req.params.id));
-  if (index === -1) return res.status(404).json({ message: "Pesanan tidak ditemukan" });
-  const deleted = orders.splice(index, 1);
-  res.json({ message: "Pesanan dihapus", deleted });
+app.get("/api/orders", async (req, res) => {
+  const { rows } = await db.query("SELECT * FROM orders");
+  res.json(rows);
 });
 
-// ======== Users =========
-app.post("/api/signup", (req, res) => {
-  const { name, email, password, image } = req.body;
-  if (!name || !email || !password)
-    return res.status(400).json({ message: "Lengkapi semua field!" });
-  if (users.some(u => u.email === email))
-    return res.status(409).json({ message: "Email sudah digunakan" });
-  const newUser = { id: Date.now(), name, email, password, image: image || null };
-  users.push(newUser);
-  res.status(201).json({ message: "Pendaftaran berhasil", user: newUser });
+app.post("/api/orders", async (req, res) => {
+  const { name, items, total, address, payment, date } = req.body;
+  const result = await db.query(
+    `INSERT INTO orders (name, items, total, address, payment, date, status, courier, trackingNumber)
+     VALUES ($1, $2, $3, $4, $5, $6, 'Belum Dibayar', '', '') RETURNING *`,
+    [name, items, total, address, payment, date || new Date().toISOString()]
+  );
+  res.status(201).json({ message: "Pesanan berhasil dibuat", order: result.rows[0] });
 });
-app.post("/api/login", (req, res) => {
-  const { email, password } = req.body;
-  const user = users.find(u => u.email === email && u.password === password);
-  if (!user) return res.status(401).json({ message: "Email atau password salah" });
-  res.json({ message: "Login berhasil", user: { id: user.id, name: user.name, email: user.email, image: user.image || null } });
+
+app.put("/api/orders/:id", async (req, res) => {
+  const keys = Object.keys(req.body);
+  const values = Object.values(req.body);
+  const setQuery = keys.map((k, i) => `${k}=$${i + 1}`).join(", ");
+  const query = `UPDATE orders SET ${setQuery} WHERE id=$${keys.length + 1} RETURNING *`;
+  const result = await db.query(query, [...values, req.params.id]);
+  if (!result.rows[0]) return res.status(404).json({ message: "Pesanan tidak ditemukan" });
+  res.json({ message: "Pesanan diupdate", order: result.rows[0] });
 });
-app.put("/api/update-user/:email", (req, res) => {
-  const { email } = req.params;
-  const user = users.find(u => u.email === email);
-  if (!user) return res.status(404).json({ message: "User tidak ditemukan" });
-  Object.assign(user, req.body);
-  res.json({ message: "User berhasil diupdate", user });
+
+app.delete("/api/orders/:id", async (req, res) => {
+  const result = await db.query("DELETE FROM orders WHERE id=$1 RETURNING *", [req.params.id]);
+  if (!result.rows[0]) return res.status(404).json({ message: "Pesanan tidak ditemukan" });
+  res.json({ message: "Pesanan dihapus", deleted: result.rows[0] });
 });
-app.delete("/api/delete-user/:email", (req, res) => {
-  const { email } = req.params;
-  const index = users.findIndex(u => u.email === email);
-  if (index === -1) return res.status(404).json({ message: "User tidak ditemukan" });
-  const deletedUser = users.splice(index, 1);
-  res.json({ message: "User berhasil dihapus", deletedUser });
+
+// ======== Draft Orders =========
+app.post("/api/checkout/draft", async (req, res) => {
+  const draft = {
+    id: Date.now().toString(),
+    ...req.body,
+    paymentStatus: "Belum Dibayar",
+    createdAt: new Date().toISOString(),
+  };
+  const result = await db.query(
+    "INSERT INTO draft_orders (id, user_id, items, total, address, payment, paymentStatus, createdAt) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *",
+    [draft.id, draft.user_id, draft.items, draft.total, draft.address, draft.payment, draft.paymentStatus, draft.createdAt]
+  );
+  res.status(200).json(result.rows[0]);
 });
-app.get("/api/users", (req, res) => res.json(users));
+
+app.get("/api/checkout/draft/:id", async (req, res) => {
+  const { rows } = await db.query("SELECT * FROM draft_orders WHERE id = $1", [req.params.id]);
+  if (!rows[0]) return res.status(404).json({ message: "Draft tidak ditemukan" });
+  res.json(rows[0]);
+});
+
+app.get("/api/checkout/drafts", async (req, res) => {
+  const { rows } = await db.query("SELECT * FROM draft_orders");
+  res.json(rows);
+});
+
+app.post("/api/checkout/confirm/:id", async (req, res) => {
+  const draft = await db.query("SELECT * FROM draft_orders WHERE id=$1", [req.params.id]);
+  if (draft.rows.length === 0) return res.status(404).json({ message: "Draft tidak ditemukan" });
+
+  const confirmed = {
+    ...draft.rows[0],
+    paymentStatus: "Sudah Dibayar",
+    paymentProof: req.body.paymentProof || "",
+  };
+
+  await db.query(
+    `INSERT INTO orders (name, items, total, address, payment, date, status, courier, trackingNumber)
+     VALUES ($1,$2,$3,$4,$5,$6,'Sudah Dibayar','','')`,
+    [confirmed.name, confirmed.items, confirmed.total, confirmed.address, confirmed.payment, confirmed.createdat]
+  );
+  await db.query("DELETE FROM draft_orders WHERE id=$1", [req.params.id]);
+  res.status(201).json({ message: "Order berhasil dikonfirmasi", order: confirmed });
+});
 
 // ======== Admin Login =========
 app.post("/api/admin/login", (req, res) => {
@@ -176,39 +252,10 @@ const storage = multer.diskStorage({
   filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname))
 });
 const upload = multer({ storage });
+
 app.post("/api/upload", upload.single("image"), (req, res) => {
   if (!req.file) return res.status(400).json({ message: "Tidak ada file diunggah" });
   res.status(200).json({ imagePath: "/images/" + req.file.filename });
-});
-
-// ======== Checkout Draft & Confirm =========
-app.post("/api/checkout/draft", (req, res) => {
-  const draft = {
-    id: Date.now().toString(),
-    ...req.body,
-    paymentStatus: "Belum Dibayar",
-    createdAt: new Date().toISOString(),
-  };
-  draftOrders.push(draft);
-  res.status(200).json(draft);
-});
-app.get("/api/checkout/draft/:id", (req, res) => {
-  const draft = draftOrders.find((d) => d.id === req.params.id);
-  if (!draft) return res.status(404).json({ message: "Draft tidak ditemukan" });
-  res.json(draft);
-});
-app.get("/api/checkout/drafts", (req, res) => res.json(draftOrders));
-app.post("/api/checkout/confirm/:id", (req, res) => {
-  const draftIndex = draftOrders.findIndex((d) => d.id === req.params.id);
-  if (draftIndex === -1) return res.status(404).json({ message: "Draft tidak ditemukan" });
-  const confirmedOrder = {
-    ...draftOrders[draftIndex],
-    paymentProof: req.body.paymentProof || "",
-    paymentStatus: "Sudah Dibayar",
-  };
-  orders.push(confirmedOrder);
-  draftOrders.splice(draftIndex, 1);
-  res.status(201).json({ message: "Order berhasil dikonfirmasi", order: confirmedOrder });
 });
 
 // ======== Start Server =========
