@@ -103,11 +103,29 @@ app.get("/api/cart", async (req, res) => {
 
 app.post("/api/cart", async (req, res) => {
   const { product_id, user_id, qty } = req.body;
-  const result = await db.query(
-    "INSERT INTO cart (product_id, user_id, qty) VALUES ($1, $2, $3) RETURNING *",
-    [product_id, user_id, qty || 1]
+
+  // Cek apakah item sudah ada
+  const check = await db.query(
+    "SELECT * FROM cart WHERE product_id = $1 AND user_id = $2",
+    [product_id, user_id]
   );
-  res.status(201).json(result.rows[0]);
+
+  if (check.rows.length > 0) {
+    // Kalau sudah ada → update qty
+    const newQty = check.rows[0].qty + (qty || 1);
+    const update = await db.query(
+      "UPDATE cart SET qty = $1 WHERE id = $2 RETURNING *",
+      [newQty, check.rows[0].id]
+    );
+    return res.status(200).json(update.rows[0]);
+  } else {
+    // Kalau belum ada → insert baru
+    const result = await db.query(
+      "INSERT INTO cart (product_id, user_id, qty) VALUES ($1, $2, $3) RETURNING *",
+      [product_id, user_id, qty || 1]
+    );
+    return res.status(201).json(result.rows[0]);
+  }
 });
 
 app.patch("/api/cart/:id", async (req, res) => {
