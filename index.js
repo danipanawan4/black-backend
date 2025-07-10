@@ -144,9 +144,13 @@ app.delete("/api/cart/:id", async (req, res) => {
 });
 
 app.delete("/api/cart", async (req, res) => {
-  await db.query("DELETE FROM cart");
-  res.json({ message: "Keranjang dikosongkan" });
+  const userId = req.query.user_id;
+  if (!userId) return res.status(400).json({ message: "User ID dibutuhkan" });
+
+  await db.query("DELETE FROM cart WHERE user_id = $1", [userId]);
+  res.json({ message: "Keranjang dikosongkan untuk user tersebut" });
 });
+
 
 // ======== Addresses =========
 app.get("/api/addresses", async (req, res) => {
